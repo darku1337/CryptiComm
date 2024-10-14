@@ -149,9 +149,15 @@ class ChatServer:
             arguments = parts[1] if len(parts) > 1 else ""
 
             if command == '/join':
-                self.join_room(nickname, arguments)
+                if self.find_user_room(nickname):
+                    self.send_error_message(nickname, "You are already in a room. Leave the room before joining another one.")
+                else:
+                    self.join_room(nickname, arguments)
             elif command == '/leave':
-                self.leave_room(nickname)
+                if not self.find_user_room(nickname):
+                    self.send_error_message(nickname, "You are not in any room.")
+                else:
+                    self.leave_room(nickname)
             elif command == '/msg':
                 self.send_private_message(nickname, arguments)
             elif command == '/rooms':
