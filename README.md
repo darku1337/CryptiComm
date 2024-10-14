@@ -6,6 +6,7 @@
 
 - **Decentralized Chatrooms**: Users can join or create chatrooms with customizable admin and owner controls.
 - **End-to-End Encryption**: All messages are securely encrypted using SSL/TLS.
+- **Private Rooms**: Room owners have the option to set a password to their room.
 - **Room Admins and Owners**: Room owners can promote or demote admins, reclaim ownership using secure tokens, and manage room members.
 - **Rate-Limiting and Anti-Spam**: Enforced rate limits to prevent spamming.
 - **Private Messaging**: Users can send private messages securely to other users.
@@ -43,11 +44,12 @@
 ## Commands
 
 ### Client Commands
-- `/join [room_name]` – Join or create a new room.
+- `/join [room_name] [password]` – Join or create a new room.
 - `/leave` – Leave the current room.
 - `/kick [nickname]` – Kick a user from your room (admin-only).
 - `/admin [nickname]` – Promote a user to admin (owner-only).
 - `/unadmin [nickname]` – Demote a user from admin (owner-only).
+- `/setpassword [password]` - Set a room password (owner-only)
 - `/reclaim [token]` – Reclaim room ownership using a secure token.
 - `/msg [nickname] [message]` – Send a private message to a user.
 - `/rooms` – List all active rooms.
