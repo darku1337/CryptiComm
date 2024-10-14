@@ -10,7 +10,8 @@ MAX_MESSAGE_LENGTH = 1024
 MAX_NICKNAME_LENGTH = 32
 MAX_CONNECTIONS_PER_IP = 5
 RATE_LIMIT = 5
-CONNECTION_TIMEOUT = 3600 #1hr till timeout
+CONNECTION_TIMEOUT = 3600  # 1hr till timeout
+
 
 class ChatServer:
     def __init__(self, port):
@@ -23,6 +24,7 @@ class ChatServer:
         self.room_admins = {}
         self.room_owners = {}
         self.owner_tokens = {}  # Store owner tokens for each room
+        self.passwords = {}  # Store room passwords
 
     def generate_owner_token(self):
         """Generate a secure random token for room ownership."""
@@ -147,15 +149,9 @@ class ChatServer:
             arguments = parts[1] if len(parts) > 1 else ""
 
             if command == '/join':
-                if self.find_user_room(nickname):
-                    self.send_error_message(nickname, "You are already in a room. Leave the room before joining another one.")
-                else:
-                    self.join_room(nickname, arguments)
+                self.join_room(nickname, arguments)
             elif command == '/leave':
-                if not self.find_user_room(nickname):
-                    self.send_error_message(nickname, "You are not in any room.")
-                else:
-                    self.leave_room(nickname)
+                self.leave_room(nickname)
             elif command == '/msg':
                 self.send_private_message(nickname, arguments)
             elif command == '/rooms':
@@ -168,6 +164,8 @@ class ChatServer:
                 self.unadmin_user(nickname, arguments)
             elif command == '/reclaim':
                 self.reclaim_ownership(nickname, arguments)
+            elif command == '/setpassword':
+                self.set_room_password(nickname, arguments)
             elif command == '/help':
                 self.send_info_message(nickname, self.get_help_message())
             else:
@@ -229,9 +227,17 @@ class ChatServer:
             except:
                 pass
 
-    def join_room(self, nickname, room_name):
-        if not room_name.strip():
+    def join_room(self, nickname, arguments):
+        if not arguments.strip():
             self.send_error_message(nickname, "Room name cannot be empty.")
+            return
+
+        parts = arguments.split(' ')
+        room_name = parts[0]
+        password = parts[1] if len(parts) > 1 else None
+
+        if room_name in self.passwords and self.passwords[room_name] and self.passwords[room_name] != password:
+            self.send_error_message(nickname, "Incorrect password for the room.")
             return
 
         if room_name not in self.rooms:
@@ -241,6 +247,7 @@ class ChatServer:
             self.room_admins[room_name] = [nickname]
             self.room_owners[room_name] = nickname
             self.owner_tokens[room_name] = token  # Store the token
+            self.passwords[room_name] = None  # No password by default
             self.send_info_message(nickname, f"You are the owner of room '{room_name}'. Your token is: {token}")
 
         if nickname not in self.rooms[room_name]['clients']:
@@ -315,6 +322,22 @@ class ChatServer:
         else:
             self.send_error_message(admin_nickname, "You are not in any room.")
 
+    def set_room_password(self, nickname, arguments):
+        """Allow the room owner to set or remove a password for their room."""
+        room_name = self.find_user_room(nickname)
+        if room_name:
+            if nickname == self.room_owners[room_name]:
+                if arguments.strip():
+                    self.passwords[room_name] = arguments
+                    self.send_info_message(nickname, f"Password for room '{room_name}' set.")
+                else:
+                    self.passwords[room_name] = None
+                    self.send_info_message(nickname, f"Password for room '{room_name}' removed.")
+            else:
+                self.send_error_message(nickname, "Only the room owner can set a password.")
+        else:
+            self.send_error_message(nickname, "You are not in any room.")
+
     def send_private_message(self, sender, message):
         parts = message.split(' ', 1)
         recipient = parts[0]
@@ -379,12 +402,13 @@ class ChatServer:
     def get_help_message(self):
         return (
             "Commands:\n"
-            "/join [room_name] - Join a room (creates one if it doesn't exist)\n"
+            "/join [room_name] [password] - Join a room (creates one if it doesn't exist, use password if applicable)\n"
             "/leave - Leave your current room\n"
             "/kick [nickname] - Kick a user from your room (admin only)\n"
             "/admin [nickname] - Promote a user to admin (room owner only)\n"
             "/unadmin [nickname] - Demote an admin (room owner only)\n"
             "/reclaim [token] - Reclaim room ownership using your token\n"
+            "/setpassword [password] - Set or remove password for your room (room owner only)\n"
             "/msg [nickname] [message] - Send a private message to a user\n"
             "/rooms - List all active rooms\n"
             "/help - Show this help message\n"
