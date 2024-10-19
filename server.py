@@ -10,7 +10,7 @@ MAX_MESSAGE_LENGTH = 1024
 MAX_NICKNAME_LENGTH = 32
 MAX_CONNECTIONS_PER_IP = 5
 RATE_LIMIT = 5
-CONNECTION_TIMEOUT = 3600  # 1hr till timeout
+CONNECTION_TIMEOUT = 3600  # 1 hour till timeout
 
 
 class ChatServer:
@@ -61,9 +61,18 @@ class ChatServer:
 
                 context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
                 context.load_cert_chain(certfile='server.crt', keyfile='server.key')
-                client_socket = context.wrap_socket(client_socket, server_side=True)
 
-                client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
+                # Set a short timeout before wrapping the socket
+                client_socket.settimeout(5)
+
+                # Wrap the socket without performing the handshake yet
+                client_socket = context.wrap_socket(
+                    client_socket, server_side=True, do_handshake_on_connect=False
+                )
+
+                client_thread = threading.Thread(
+                    target=self.handle_client, args=(client_socket, client_address)
+                )
                 client_thread.start()
             except (KeyboardInterrupt, SystemExit):
                 print("Server shutting down...")
@@ -96,6 +105,31 @@ class ChatServer:
     def handle_client(self, client_socket, client_address):
         ip = client_address[0]
 
+        # Attempt the SSL handshake
+        try:
+            client_socket.do_handshake()
+        except ssl.SSLError as e:
+            print(f"SSL handshake failed with client {client_address}: {e}")
+            client_socket.close()
+            if ip in self.client_ips:
+                self.client_ips[ip] -= 1
+            return
+        except socket.timeout:
+            print(f"SSL handshake timed out with client {client_address}")
+            client_socket.close()
+            if ip in self.client_ips:
+                self.client_ips[ip] -= 1
+            return
+        except Exception as e:
+            print(f"Unexpected error during SSL handshake with client {client_address}: {e}")
+            client_socket.close()
+            if ip in self.client_ips:
+                self.client_ips[ip] -= 1
+            return
+
+        # Set the timeout for regular operations
+        client_socket.settimeout(CONNECTION_TIMEOUT)
+
         while True:
             client_socket.sendall(f"Enter your nickname (max {MAX_NICKNAME_LENGTH} characters): ".encode('utf-8'))
             nickname = client_socket.recv(1024).decode('utf-8').strip()
@@ -120,7 +154,6 @@ class ChatServer:
 
         while True:
             try:
-                client_socket.settimeout(CONNECTION_TIMEOUT)
                 message = client_socket.recv(MAX_MESSAGE_LENGTH).decode('utf-8')
 
                 if not message:
